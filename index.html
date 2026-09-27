@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Presensi Ekstrakurikuler</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+</head>
+<body>
+  <div class="bg-shape shape-1"></div>
+  <div class="bg-shape shape-2"></div>
+
+  <nav class="navbar">
+    <div class="nav-brand">
+      <i class="fa-solid fa-user-check brand-icon"></i>
+      <span>PresensiEkskul</span>
+    </div>
+    <div class="nav-actions">
+      <div id="connection-status" class="status-badge online">
+        <i class="fa-solid fa-wifi"></i> <span id="status-text">Online</span>
+      </div>
+      <div id="pending-badge" class="pending-badge hidden">
+        <i class="fa-solid fa-cloud-arrow-up"></i> <span id="pending-count">0</span>
+      </div>
+      <button id="btn-lang-toggle" class="btn-icon" title="Switch Language">
+        <i class="fa-solid fa-globe"></i> <span id="current-lang">ID</span>
+      </button>
+      <button id="btn-open-login" class="btn-secondary">
+        <i class="fa-solid fa-lock"></i> <span data-i18n="nav_login">Login Pembina</span>
+      </button>
+    </div>
+  </nav>
+
+  <main class="main-container">
+
+    <section id="guest-section" class="card glass-card">
+      <div class="card-header">
+        <h2 data-i18n="form_title"><i class="fa-solid fa-clipboard-user"></i> Form Presensi Siswa</h2>
+        <p data-i18n="form_subtitle">Silakan isi data dan lakukan verifikasi wajah untuk hadir kegiatan ekstrakurikuler.</p>
+      </div>
+
+      <form id="presensi-form" onsubmit="return false;">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="input-nama" data-i18n="label_nama">Nama Lengkap</label>
+            <div class="input-wrapper">
+              <i class="fa-solid fa-user"></i>
+              <input type="text" id="input-nama" list="siswa-list" placeholder="Ilham Budi" required autocomplete="off">
+              <datalist id="siswa-list"></datalist>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="input-ekskul" data-i18n="label_ekskul">Nama Ekstrakurikuler</label>
+            <div class="input-wrapper">
+              <i class="fa-solid fa-futbol"></i>
+              <input type="text" id="input-ekskul" list="ekskul-list" placeholder="Pramuka" required autocomplete="off">
+              <datalist id="ekskul-list"></datalist>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="input-kelas" data-i18n="label_kelas">Kelas</label>
+            <div class="input-wrapper">
+              <i class="fa-solid fa-school"></i>
+              <input type="text" id="input-kelas" placeholder="7A" required>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label data-i18n="label_kehadiran">Status Kehadiran</label>
+            <div class="input-wrapper disabled">
+              <i class="fa-solid fa-check-circle"></i>
+              <input type="text" value="Hadir" readonly disabled>
+            </div>
+          </div>
+        </div>
+
+        <div class="gps-box">
+          <div class="gps-info">
+            <i class="fa-solid fa-location-dot gps-icon"></i>
+            <div>
+              <strong data-i18n="gps_title">Lokasi GPS Terdeteksi:</strong>
+              <div id="gps-coords" class="coords-text">Mengambil lokasi...</div>
+            </div>
+          </div>
+          <button type="button" id="btn-refresh-gps" class="btn-small">
+            <i class="fa-solid fa-rotate-right"></i>
+          </button>
+        </div>
+
+        <div class="camera-section">
+          <label class="camera-label" data-i18n="label_camera">Photo Wajah</label>
+          
+          <div id="camera-gate" class="camera-placeholder">
+            <i class="fa-solid fa-camera camera-placeholder-icon"></i>
+            <p data-i18n="camera_gate_msg">Klik tombol di bawah untuk membuka kamera selfie.</p>
+            <button type="button" id="btn-open-camera" class="btn-primary">
+              <i class="fa-solid fa-video"></i> <span data-i18n="btn_open_camera">Buka Kamera</span>
+            </button>
+          </div>
+
+          <div id="camera-container" class="camera-container hidden">
+            <div class="video-wrapper">
+              <video id="webcam" autoplay playsinline muted></video>
+              <canvas id="face-canvas"></canvas>
+            </div>
+            
+            <div id="face-status" class="face-status waiting">
+              <i class="fa-solid fa-spinner fa-spin"></i> <span data-i18n="face_status_loading">Mendeteksi Wajah Manusia...</span>
+            </div>
+
+            <div class="camera-actions">
+              <button type="button" id="btn-snap" class="btn-success" disabled>
+                <i class="fa-solid fa-camera-retro"></i> <span data-i18n="btn_snap">Ambil Foto Selfie</span>
+              </button>
+              <button type="button" id="btn-retake" class="btn-warning hidden">
+                <i class="fa-solid fa-arrows-rotate"></i> <span data-i18n="btn_retake">Foto Ulang</span>
+              </button>
+            </div>
+          </div>
+
+          <canvas id="snapshot-canvas" class="hidden"></canvas>
+          <div id="preview-container" class="preview-container hidden">
+            <img id="selfie-preview" alt="Selfie Preview">
+            <div class="photo-badge"><i class="fa-solid fa-circle-check"></i> Foto Siap</div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="btn-submit-presensi" class="btn-submit" disabled>
+            <i class="fa-solid fa-paper-plane"></i> <span data-i18n="btn_submit">Kirim Presensi</span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <section id="admin-section" class="card glass-card hidden">
+      <div class="dashboard-header">
+        <div>
+          <h2><i class="fa-solid fa-chart-line"></i> Dashboard Pembina Ekstrakurikuler</h2>
+          <p>Login sebagai Ekskul: <strong id="admin-ekskul-name" class="text-accent">-</strong></p>
+        </div>
+        <button id="btn-admin-logout" class="btn-danger">
+          <i class="fa-solid fa-right-from-bracket"></i> <span data-i18n="btn_logout">Keluar</span>
+        </button>
+      </div>
+
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <i class="fa-solid fa-users metric-icon blue"></i>
+          <div>
+            <span class="metric-title" data-i18n="metric_total">Total Presensi</span>
+            <h3 id="stat-total">0</h3>
+          </div>
+        </div>
+        <div class="metric-card">
+          <i class="fa-solid fa-user-check metric-icon green"></i>
+          <div>
+            <span class="metric-title" data-i18n="metric_verified">Siswa Terdaftar</span>
+            <h3 id="stat-verified">0</h3>
+          </div>
+        </div>
+        <div class="metric-card">
+          <i class="fa-solid fa-user-xmark metric-icon red"></i>
+          <div>
+            <span class="metric-title" data-i18n="metric_unverified">Siswa Tidak Terdaftar</span>
+            <h3 id="stat-unverified">0</h3>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-group">
+          <label for="filter-period" data-i18n="filter_label"><i class="fa-solid fa-filter"></i> Periode:</label>
+          <select id="filter-period">
+            <option value="all" data-i18n="opt_all">Semua Riwayat</option>
+            <option value="weekly" data-i18n="opt_weekly">Minggu Ini</option>
+            <option value="monthly" data-i18n="opt_monthly">Bulan Ini</option>
+            <option value="semester" data-i18n="opt_semester">Semester Ini</option>
+          </select>
+        </div>
+
+        <div class="search-group">
+          <input type="text" id="search-keyword" placeholder="Cari Nama / Kelas..." autocomplete="off">
+        </div>
+
+        <button id="btn-export-excel" class="btn-excel">
+          <i class="fa-solid fa-file-excel"></i> <span data-i18n="btn_export">Export Excel / CSV</span>
+        </button>
+      </div>
+      <div class="table-responsive">
+        <table id="presensi-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th data-i18n="th_tanggal">Tanggal</th>
+              <th data-i18n="th_nama">Nama</th>
+              <th data-i18n="th_kelas">Kelas</th>
+              <th data-i18n="th_ekskul">Ekskul</th>
+              <th data-i18n="th_verif_siswa">Verifikasi Siswa</th>
+              <th data-i18n="th_verif_ekskul">Verifikasi Ekskul</th>
+              <th data-i18n="th_kehadiran">Kehadiran</th>
+              <th data-i18n="th_lokasi">GPS</th>
+              <th data-i18n="th_foto">Foto Selfie</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <tr>
+              <td colspan="10" class="text-center">Memuat data...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="login-modal" class="modal-overlay hidden">
+    <div class="modal-card glass-card">
+      <button id="btn-close-modal" class="modal-close"><i class="fa-solid fa-xmark"></i></button>
+      <div class="modal-header">
+        <i class="fa-solid fa-user-shield modal-icon"></i>
+        <h3 data-i18n="login_title">Login Pembina / Admin</h3>
+        <p data-i18n="login_subtitle">Masukkan nama ekskul dan kata sandi untuk mengakses dashboard.</p>
+      </div>
+      <form id="login-form" onsubmit="return false;">
+        <div class="form-group">
+          <label for="login-ekskul" data-i18n="label_ekskul">Nama Ekstrakurikuler</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-futbol"></i>
+            <input type="text" id="login-ekskul" placeholder="Contoh: Pramuka" required>
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="login-password" data-i18n="label_password">Kata Sandi</label>
+          <div class="input-wrapper">
+            <i class="fa-solid fa-key"></i>
+            <input type="password" id="login-password" placeholder="••••••••" required>
+          </div>
+        </div>
+        <button type="submit" id="btn-submit-login" class="btn-primary btn-block">
+          <i class="fa-solid fa-right-to-bracket"></i> <span data-i18n="btn_login_submit">Masuk Dashboard</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+  <script src="script.js"></script>
+</body>
+</html>
