@@ -140,31 +140,19 @@ function applyLanguage() {
 }
 
 function setupGPS() {
-  const coordsElem = document.getElementById('gps-coords');
   if (!navigator.geolocation) {
-    coordsElem.textContent = "Geolocation tidak didukung browser ini.";
+    state.userLocation.mapsUrl = "GPS Tidak Didukung Browser";
     return;
   }
 
-  coordsElem.textContent = "Mengambil koordinat...";
   navigator.geolocation.getCurrentPosition(
     (pos) => {
-      state.userLocation.lat = pos.coords.latitude.toFixed(6);
-      state.userLocation.lng = pos.coords.longitude.toFixed(6);
-      
-      state.userLocation.mapsUrl = `https://www.google.com/maps?q=${state.userLocation.lat},${state.userLocation.lng}`;
-      state.userLocation.formatted = state.userLocation.mapsUrl;
-
-      coordsElem.innerHTML = `
-        <a href="${state.userLocation.mapsUrl}" target="_blank" rel="noopener" class="maps-link">
-          <i class="fa-solid fa-map-location-dot"></i> ${state.userLocation.lat}, ${state.userLocation.lng} (Buka Google Maps)
-        </a>
-      `;
+      const lat = pos.coords.latitude.toFixed(6);
+      const lng = pos.coords.longitude.toFixed(6);
+      state.userLocation.mapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
     },
     (err) => {
-      state.userLocation.formatted = "-";
-      state.userLocation.mapsUrl = "";
-      coordsElem.textContent = "GPS Terkunci / Izinkan Akses Lokasi";
+      state.userLocation.mapsUrl = "GPS Terkunci / Izinkan Akses Lokasi";
     },
     { enableHighAccuracy: true, timeout: 10000 }
   );
@@ -177,9 +165,14 @@ async function setupCamera() {
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+      video: {
+        facingMode: "user",
+        width: { ideal: 720 },
+        height: { ideal: 1280 }
+      },
       audio: false
     });
+    
     video.srcObject = stream;
     state.isCameraActive = true;
     
@@ -255,15 +248,41 @@ function takeSelfieSnapshot() {
 
   const video = document.getElementById('webcam');
   const snapCanvas = document.getElementById('snapshot-canvas');
-  snapCanvas.width = 1280;
-  snapCanvas.height = 720;
   
-  const ctx = snapCanvas.getContext('2d');
-  ctx.translate(snapCanvas.width, 0);
-  ctx.scale(-1, 1);
-  ctx.drawImage(video, 0, 0, snapCanvas.width, snapCanvas.height);
+  const vWidth = video.videoWidth || 640;
+  const vHeight = video.videoHeight || 480;
 
-  state.selfieBase64 = snapCanvas.toDataURL('image/jpeg', 0.95);
+  let targetWidth, targetHeight, sx, sy, sWidth, sHeight;
+
+  if (vWidth > vHeight) {
+    sHeight = vHeight;
+    sWidth = Math.round(vHeight * (3 / 4));
+    sx = Math.round((vWidth - sWidth) / 2);
+    sy = 0;
+    targetWidth = sWidth;
+    targetHeight = sHeight;
+  } else {
+    sWidth = vWidth;
+    sHeight = vHeight;
+    sx = 0;
+    sy = 0;
+    targetWidth = vWidth;
+    targetHeight = vHeight;
+  }
+
+  snapCanvas.width = targetWidth;
+  snapCanvas.height = targetHeight;
+
+  const ctx = snapCanvas.getContext('2d');
+  
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+  ctx.translate(targetWidth, 0);
+  ctx.scale(-1, 1);
+
+  ctx.drawImage(video, sx, sy, sWidth, sHeight, 0, 0, targetWidth, targetHeight);
+
+  state.selfieBase64 = snapCanvas.toDataURL('image/jpeg', 0.92);
 
   stopCamera();
 
@@ -365,14 +384,10 @@ async function handlePresensiSubmit() {
   const nama = document.getElementById('input-nama').value.trim();
   const ekskul = document.getElementById('input-ekskul').value.trim();
   const kelas = document.getElementById('input-kelas').value.trim();
+  const foto = state.selfieBase64;
 
-  if (!nama || !ekskul || !kelas) {
-    showToast("Harap isi seluruh field!", "error");
-    return;
-  }
-
-  if (!state.selfieBase64) {
-    showToast("Foto selfie wajib diambil terlebih dahulu!", "error");
+  if (!nama || !ekskul || !kelas || !foto) {
+    showToast("Gagal! Nama Lengkap, Kelas, Ekstrakurikuler, dan Foto Wajah WAJIB diisi!", "error");
     return;
   }
 
@@ -389,8 +404,8 @@ async function handlePresensiSubmit() {
     nama: nama,
     ekskul: ekskul,
     kelas: kelas,
-    lokasi: state.userLocation.mapsUrl || state.userLocation.formatted || "-",
-    fotoBase64: state.selfieBase64,
+    lokasi: state.userLocation.mapsUrl || "GPS Tidak Terdeteksi", // Tautkan link Google Maps di backend
+    fotoBase64: foto,
     timestamp: new Date().toISOString()
   };
 
